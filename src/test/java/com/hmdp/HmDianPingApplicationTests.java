@@ -1,5 +1,7 @@
 package com.hmdp;
 
+import com.hmdp.service.IShopService;
+import com.hmdp.service.impl.ShopServiceImpl;
 import com.hmdp.utils.RedisConstants;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +19,9 @@ class HmDianPingApplicationTests {
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
 
+    @Resource
+    private ShopServiceImpl shopService;
+
     @Autowired
     private RedisTemplate redisTemplate;
     @Test
@@ -25,7 +30,10 @@ class HmDianPingApplicationTests {
         System.out.println("成功");
     }
 
-
+    @Test
+    public void shopservice(){
+        shopService.saveShop2Redis(1L,10L);
+    }
 
 }
 
