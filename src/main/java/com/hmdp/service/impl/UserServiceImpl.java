@@ -93,9 +93,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
                 CopyOptions.create().setIgnoreNullValue(true).setFieldValueEditor((filename,fileVaule) -> fileVaule.toString()));
 
         stringRedisTemplate.opsForHash().putAll(LOGIN_USER_KEY + token,userMap);
-        stringRedisTemplate.expire(LOGIN_USER_KEY + token,LOGIN_USER_TTL,TimeUnit.MINUTES);
+        stringRedisTemplate.expire(LOGIN_USER_KEY + token,LOGIN_USER_TTL,TimeUnit.HOURS);
         //session.setAttribute("user", BeanUtil.copyProperties(user, UserDTO.class));
-
 
         return Result.ok(token);
     }

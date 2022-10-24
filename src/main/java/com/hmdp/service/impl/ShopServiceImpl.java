@@ -1,5 +1,6 @@
 package com.hmdp.service.impl;
 
+import cn.hutool.cache.Cache;
 import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
@@ -9,6 +10,7 @@ import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.hmdp.utils.CacheClient;
 import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.RedisData;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -22,8 +24,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import static com.hmdp.utils.RedisConstants.CACHE_SHOP_KEY;
-import static com.hmdp.utils.RedisConstants.LOCK_SHOP_KEY;
+import static com.hmdp.utils.RedisConstants.*;
 
 /**
  * <p>
@@ -41,13 +42,21 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
+    @Resource
+    CacheClient cacheClient;
     @Override
     public Result queryById(Long id) {
+        //穿透封装
+        Shop shop = cacheClient.queryWithThrough(CACHE_SHOP_KEY, id, Shop.class,this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
+        //过期封装
+        //Shop shop = cacheClient.queryWithPassLogicalExpire(CACHE_SHOP_KEY,id,Shop.class,this::getById,20L,TimeUnit.MINUTES);
+
+        //---------------------------------------------------------------
         //穿透
         //Shop shop = queryWithPassThrough(id);
 
         //击穿
-        Shop shop = queryWithPassMutex(id);
+        //Shop shop = queryWithPassMutex(id);
 
         //逻辑过期
         //Shop shop = queryWithPassLogicalExpire(id);
@@ -59,6 +68,32 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         return Result.ok(shop);
     }
 
+
+    public Shop queryWithThrough(Long id){
+
+        String key = CACHE_SHOP_KEY + id;
+
+        String shopjson = stringRedisTemplate.opsForValue().get(key);
+
+        if (StrUtil.isNotBlank(shopjson)) {
+            return JSONUtil.toBean(shopjson,Shop.class);
+        }
+
+        if(shopjson != null){
+            return null;
+        }
+
+        Shop shop = getById(id);
+
+        if(shop == null){
+            stringRedisTemplate.opsForValue().set(key,"",CACHE_NULL_TTL,TimeUnit.MINUTES);
+            return null;
+        }
+
+        stringRedisTemplate.opsForValue().set(key,JSONUtil.toJsonStr(shop),CACHE_SHOP_TTL,TimeUnit.MINUTES);
+
+        return shop;
+    }
     //逻辑过期
     public Shop queryWithPassLogicalExpire(Long id){
 
