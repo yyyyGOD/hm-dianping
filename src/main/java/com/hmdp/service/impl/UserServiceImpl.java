@@ -12,14 +12,20 @@ import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.RegexUtils;
+import com.hmdp.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
+import org.springframework.data.redis.connection.BitFieldSubCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpSession;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
@@ -105,5 +111,60 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         user.setNickName(USER_NICK_NAME_PREFIX + RandomUtil.randomString(10));
         save(user);
         return user;
+    }
+
+    //签到
+    @Override
+    public Result sign() {
+        Long userId = UserHolder.getUser().getId();
+
+        LocalDateTime now = LocalDateTime.now();
+
+        String keysuffix = now.format(DateTimeFormatter.ofPattern(":yyyyMM"));
+        String key = USER_SIGN_KEY + userId + keysuffix;
+
+        int dayOfMonth = now.getDayOfMonth();
+        //offet:偏移量
+        stringRedisTemplate.opsForValue().setBit(key,dayOfMonth - 1,true);
+
+        return Result.ok();
+    }
+    //签到统计
+    @Override
+    public Result signCount() {
+        Long userId = UserHolder.getUser().getId();
+
+        LocalDateTime now = LocalDateTime.now();
+
+        String keysuffix = now.format(DateTimeFormatter.ofPattern(":yyyyMM"));
+        String key = USER_SIGN_KEY + userId + keysuffix;
+
+        int dayOfMonth = now.getDayOfMonth();
+
+        List<Long> result = stringRedisTemplate.opsForValue().bitField(
+                key,
+                BitFieldSubCommands.create()
+                        .get(BitFieldSubCommands.BitFieldType.unsigned(dayOfMonth)).valueAt(0)
+        );
+        if(result == null || result.isEmpty()){
+            return Result.ok(0);
+        }
+
+        Long num = result.get(0);
+        if(num == null || num == 0){
+            return Result.ok(0);
+        }
+
+        int count = 0;
+        while (true){
+            if((num & 1) == 0){
+                break;
+            }else {
+                count++;
+            }
+            num >>>= 1;
+        }
+
+        return Result.ok(count);
     }
 }
